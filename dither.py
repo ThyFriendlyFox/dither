@@ -25,8 +25,8 @@ class DitherDockApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Dither Dock")
-        self.root.geometry("1200x800")
-        self.root.configure(bg="#222")
+        self.root.geometry("1400x900")
+        self.root.configure(bg="#2b2b2b")
         self.image = None
         self.preview_image = None
         self.display_image = None
@@ -49,85 +49,293 @@ class DitherDockApp:
         self.setup_ui()
 
     def setup_ui(self):
+        # Configure styles for a modern look
         style = ttk.Style()
-        style.configure('Toolbutton', font=('Arial', 12, 'bold'))
-        # Main image display
-        self.canvas = tk.Canvas(self.root, bg="#222", highlightthickness=0)
+        style.theme_use('clam')
+        style.configure('Toolbutton', font=('Segoe UI', 10, 'bold'), background='#3c3c3c')
+        style.configure('TFrame', background='#2b2b2b')
+        style.configure('TLabel', background='#2b2b2b', foreground='#ffffff', font=('Segoe UI', 9))
+        style.configure('TButton', font=('Segoe UI', 9))
+        style.configure('TCheckbutton', background='#2b2b2b', foreground='#ffffff', font=('Segoe UI', 9))
+        
+        # Main container with padding
+        main_container = ttk.Frame(self.root, padding="10")
+        main_container.pack(fill=tk.BOTH, expand=True)
+        
+        # Top toolbar
+        toolbar = ttk.Frame(main_container)
+        toolbar.pack(fill=tk.X, pady=(0, 10))
+        
+        # File operations
+        file_frame = ttk.LabelFrame(toolbar, text="File Operations", padding="8")
+        file_frame.pack(side=tk.LEFT, padx=(0, 10))
+        
+        load_btn = ttk.Button(file_frame, text="📁 Load Image", command=self.load_image, width=15)
+        load_btn.pack(side=tk.LEFT, padx=(0, 5))
+        
+        save_btn = ttk.Button(file_frame, text="💾 Save Image", command=self.save_image, width=15)
+        save_btn.pack(side=tk.LEFT, padx=(0, 5))
+        
+        batch_btn = ttk.Button(file_frame, text="📂 Batch Process", command=self.apply_to_folder, width=15)
+        batch_btn.pack(side=tk.LEFT)
+        
+        # Image info
+        self.info_label = ttk.Label(toolbar, text="No image loaded", font=('Segoe UI', 9, 'italic'))
+        self.info_label.pack(side=tk.RIGHT, padx=10)
+        
+        # Main content area
+        content_frame = ttk.Frame(main_container)
+        content_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Left panel - Controls
+        left_panel = ttk.Frame(content_frame, width=350)
+        left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        left_panel.pack_propagate(False)
+        
+        # Right panel - Image display
+        right_panel = ttk.Frame(content_frame)
+        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        
+        # Image canvas with border
+        canvas_frame = ttk.LabelFrame(right_panel, text="Preview", padding="5")
+        canvas_frame.pack(fill=tk.BOTH, expand=True)
+        
+        self.canvas = tk.Canvas(canvas_frame, bg="#1e1e1e", highlightthickness=0, relief=tk.FLAT)
         self.canvas.pack(fill=tk.BOTH, expand=True)
-
-        # Bottom dock frame
-        dock = tk.Frame(self.root, bg="#222", height=120)
-        dock.pack(side=tk.BOTTOM, fill=tk.X)
-
-        # File menu dropdown
-        file_menu_btn = ttk.Menubutton(dock, text="File ▼")
-        file_menu = tk.Menu(file_menu_btn, tearoff=0)
-        file_menu.add_command(label="Load Image", command=self.load_image)
-        file_menu.add_command(label="Save Image", command=self.save_image)
-        file_menu.add_command(label="Apply to Folder", command=self.apply_to_folder)
-        file_menu_btn['menu'] = file_menu
-        file_menu_btn.pack(side=tk.RIGHT, padx=10, pady=10)
-
-        # Collapsible: Image Adjustments
-        adj_section = CollapsibleSection(dock, "Image Adjustments")
-        adj_section.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
-        self.add_slider_entry(adj_section.body, "Brightness", self.brightness, 0.2, 2.0, 1.0)
-        self.add_slider_entry(adj_section.body, "Contrast", self.contrast, 0.5, 2.0, 1.0)
-        self.add_slider_entry(adj_section.body, "Black Clip", self.black_clip, 0, 128, 0, is_int=True)
-
-        # Collapsible: Dither Style
-        style_section = CollapsibleSection(dock, "Dither Style")
-        style_section.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
-        algo_label = ttk.Label(style_section.body, text="Algorithm:")
-        algo_label.pack(anchor=tk.W)
-        algo_combo = ttk.Combobox(style_section.body, textvariable=self.dither_algorithm, values=self.dither_algorithms, state="readonly", width=15)
-        algo_combo.pack(fill=tk.X, pady=2)
-        algo_combo.bind("<Button-1>", self.show_dropup)
+        
+        # Create scrollable control panel
+        control_canvas = tk.Canvas(left_panel, bg="#2b2b2b", highlightthickness=0)
+        scrollbar = ttk.Scrollbar(left_panel, orient="vertical", command=control_canvas.yview)
+        scrollable_frame = ttk.Frame(control_canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: control_canvas.configure(scrollregion=control_canvas.bbox("all"))
+        )
+        
+        control_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        control_canvas.configure(yscrollcommand=scrollbar.set)
+        
+        control_canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Image Adjustments Section
+        adj_section = self.create_section(scrollable_frame, "Image Adjustments", "🎨")
+        self.add_slider_entry(adj_section, "Brightness", self.brightness, 0.2, 2.0, 1.0, "Adjust overall image brightness")
+        self.add_slider_entry(adj_section, "Contrast", self.contrast, 0.5, 2.0, 1.0, "Control image contrast")
+        self.add_slider_entry(adj_section, "Black Clip", self.black_clip, 0, 128, 0, "Set minimum brightness threshold", is_int=True)
+        
+        # Dither Algorithm Section
+        algo_section = self.create_section(scrollable_frame, "Dither Algorithm", "🔧")
+        
+        # Algorithm selection
+        algo_frame = ttk.Frame(algo_section)
+        algo_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(algo_frame, text="Method:").pack(anchor=tk.W)
+        algo_combo = ttk.Combobox(algo_frame, textvariable=self.dither_algorithm, 
+                                 values=self.dither_algorithms, state="readonly", 
+                                 font=('Segoe UI', 9))
+        algo_combo.pack(fill=tk.X, pady=(2, 0))
         algo_combo.bind("<<ComboboxSelected>>", lambda e: self.debounced_update_preview())
-        self.add_slider_entry(style_section.body, "Brightness Threshold", self.dither_strength, 0, 255, 128, is_int=True)
-        self.add_slider_entry(style_section.body, "Dot Size", self.dot_size, 1, 12, 4, is_int=True)
-        self.add_slider_entry(style_section.body, "Detail", self.detail, 1, 64, 8, is_int=True)
-        shape_label = ttk.Label(style_section.body, text="Shape/Orientation:")
-        shape_label.pack(anchor=tk.W, pady=(6,0))
-        shape_combo = ttk.Combobox(style_section.body, textvariable=self.shape, values=self.shape_options, state="readonly", width=18)
-        shape_combo.pack(fill=tk.X, pady=2)
+        
+        # Algorithm descriptions
+        desc_frame = ttk.Frame(algo_section)
+        desc_frame.pack(fill=tk.X, pady=5)
+        desc_text = tk.Text(desc_frame, height=3, wrap=tk.WORD, bg="#3c3c3c", fg="#ffffff", 
+                           font=('Segoe UI', 8), relief=tk.FLAT, state=tk.DISABLED)
+        desc_text.pack(fill=tk.X)
+        
+        # Update description based on selection
+        def update_desc(*args):
+            desc_text.config(state=tk.NORMAL)
+            desc_text.delete(1.0, tk.END)
+            algo = self.dither_algorithm.get()
+            if algo == "Floyd-Steinberg":
+                desc_text.insert(1.0, "Classic error diffusion dithering that distributes quantization errors to neighboring pixels.")
+            elif algo == "Ordered":
+                desc_text.insert(1.0, "Pattern-based dithering using Bayer matrices for structured noise distribution.")
+            elif algo == "Atkinson":
+                desc_text.insert(1.0, "Apple's dithering algorithm with reduced artifacts and smoother gradients.")
+            desc_text.config(state=tk.DISABLED)
+        
+        self.dither_algorithm.trace('w', update_desc)
+        update_desc()
+        
+        self.add_slider_entry(algo_section, "Threshold", self.dither_strength, 0, 255, 128, 
+                             "Brightness threshold for black/white conversion", is_int=True)
+        
+        # Shape Settings Section
+        shape_section = self.create_section(scrollable_frame, "Shape Settings", "🔷")
+        
+        # Shape selection
+        shape_frame = ttk.Frame(shape_section)
+        shape_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(shape_frame, text="Pattern Type:").pack(anchor=tk.W)
+        shape_combo = ttk.Combobox(shape_frame, textvariable=self.shape, 
+                                  values=self.shape_options, state="readonly", 
+                                  font=('Segoe UI', 9))
+        shape_combo.pack(fill=tk.X, pady=(2, 0))
         shape_combo.bind("<<ComboboxSelected>>", lambda e: self.debounced_update_preview())
+        
+        self.add_slider_entry(shape_section, "Dot Size", self.dot_size, 1, 12, 4, 
+                             "Maximum size of shape elements", is_int=True)
+        self.add_slider_entry(shape_section, "Detail Level", self.detail, 1, 64, 8, 
+                             "Density of shape placement (higher = finer detail)", is_int=True)
+        
+        # Output Settings Section
+        output_section = self.create_section(scrollable_frame, "Output Settings", "📤")
+        
+        self.add_slider_entry(output_section, "Zoom Factor", self.zoom, 0.5, 3.0, 1.0, 
+                             "Scale the output image")
+        
+        # Color options
+        color_frame = ttk.Frame(output_section)
+        color_frame.pack(fill=tk.X, pady=10)
+        
+        color_toggle = ttk.Checkbutton(color_frame, text="Enable Color Output", 
+                                      variable=self.color_mode, onvalue="color", 
+                                      offvalue="grayscale", command=self.debounced_update_preview)
+        color_toggle.pack(anchor=tk.W, pady=(0, 5))
+        
+        hue_frame = ttk.Frame(color_frame)
+        hue_frame.pack(fill=tk.X)
+        ttk.Label(hue_frame, text="Hue (when color enabled):").pack(anchor=tk.W)
+        hue_slider = ttk.Scale(hue_frame, from_=0, to=1, variable=self.hue, 
+                              orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview())
+        hue_slider.pack(fill=tk.X, pady=(2, 0))
+        
+        # Quick Presets Section
+        presets_section = self.create_section(scrollable_frame, "Quick Presets", "⚡")
+        
+        presets_frame = ttk.Frame(presets_section)
+        presets_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Button(presets_frame, text="Classic B&W", 
+                  command=lambda: self.apply_preset("classic")).pack(fill=tk.X, pady=2)
+        ttk.Button(presets_frame, text="Retro Gaming", 
+                  command=lambda: self.apply_preset("retro")).pack(fill=tk.X, pady=2)
+        ttk.Button(presets_frame, text="Modern Art", 
+                  command=lambda: self.apply_preset("modern")).pack(fill=tk.X, pady=2)
+        ttk.Button(presets_frame, text="Reset to Defaults", 
+                  command=self.reset_to_defaults).pack(fill=tk.X, pady=2)
 
-        # Collapsible: Output
-        out_section = CollapsibleSection(dock, "Output")
-        out_section.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
-        self.add_slider_entry(out_section.body, "Zoom", self.zoom, 0.5, 3.0, 1.0)
-        color_toggle = ttk.Checkbutton(out_section.body, text="Color", variable=self.color_mode, onvalue="color", offvalue="grayscale", command=self.debounced_update_preview)
-        color_toggle.pack(anchor=tk.W, pady=(6,0))
-        hue_label = ttk.Label(out_section.body, text="Mono Hue:")
-        hue_label.pack(anchor=tk.W)
-        hue_slider = ttk.Scale(out_section.body, from_=0, to=1, variable=self.hue, orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview(), length=100)
-        hue_slider.pack(fill=tk.X)
+    def create_section(self, parent, title, icon):
+        """Create a styled section with title and icon"""
+        section = ttk.LabelFrame(parent, text=f"{icon} {title}", padding="10")
+        section.pack(fill=tk.X, pady=5)
+        return section
 
-    def add_slider_entry(self, parent, label, var, minv, maxv, default, is_int=False):
+    def add_slider_entry(self, parent, label, var, minv, maxv, default, tooltip="", is_int=False):
+        """Create a slider with entry field and tooltip"""
         frame = ttk.Frame(parent)
-        frame.pack(fill=tk.X, pady=2)
-        ttk.Label(frame, text=label+":").pack(side=tk.LEFT)
-        slider = ttk.Scale(frame, from_=minv, to=maxv, variable=var, orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview(), length=80)
-        slider.pack(side=tk.LEFT, padx=4)
-        entry = ttk.Entry(frame, textvariable=var, width=5)
-        entry.pack(side=tk.LEFT)
+        frame.pack(fill=tk.X, pady=5)
+        
+        # Label and tooltip
+        label_frame = ttk.Frame(frame)
+        label_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(label_frame, text=label, font=('Segoe UI', 9, 'bold')).pack(side=tk.LEFT)
+        
+        if tooltip:
+            tooltip_label = ttk.Label(label_frame, text="ⓘ", font=('Segoe UI', 8), foreground='#888888')
+            tooltip_label.pack(side=tk.RIGHT)
+            self.create_tooltip(tooltip_label, tooltip)
+        
+        # Slider and entry
+        control_frame = ttk.Frame(frame)
+        control_frame.pack(fill=tk.X)
+        
+        slider = ttk.Scale(control_frame, from_=minv, to=maxv, variable=var, 
+                          orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview())
+        slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        entry = ttk.Entry(control_frame, textvariable=var, width=8, font=('Segoe UI', 9))
+        entry.pack(side=tk.RIGHT)
+        
         def validate_entry(*_):
             try:
                 v = int(var.get()) if is_int else float(var.get())
                 if v < minv: v = minv
                 if v > maxv: v = maxv
-                var.set(int(v) if is_int else round(v,2))
+                var.set(int(v) if is_int else round(v, 2))
             except:
                 var.set(default)
             self.debounced_update_preview()
+        
         entry.bind('<Return>', validate_entry)
+        entry.bind('<FocusOut>', validate_entry)
 
-    def show_dropup(self, event):
-        widget = event.widget
-        widget.tk.call("ttk::combobox::PopdownWindow", widget)
-        popdown = widget.tk.call("ttk::combobox::PopdownWindow", widget)
-        widget.tk.call("wm", "geometry", popdown, "+%d+%d" % (widget.winfo_rootx(), widget.winfo_rooty() - 100))
+    def create_tooltip(self, widget, text):
+        """Create a tooltip for a widget"""
+        def show_tooltip(event):
+            tooltip = tk.Toplevel()
+            tooltip.wm_overrideredirect(True)
+            tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            
+            label = ttk.Label(tooltip, text=text, background="#ffffe0", relief=tk.SOLID, borderwidth=1, 
+                             font=('Segoe UI', 8), wraplength=200)
+            label.pack()
+            
+            def hide_tooltip(event):
+                tooltip.destroy()
+            
+            widget.tooltip = tooltip
+            widget.bind('<Leave>', hide_tooltip)
+        
+        widget.bind('<Enter>', show_tooltip)
+
+    def apply_preset(self, preset_name):
+        """Apply a preset configuration"""
+        if preset_name == "classic":
+            self.brightness.set(1.0)
+            self.contrast.set(1.2)
+            self.black_clip.set(20)
+            self.dither_algorithm.set("Floyd-Steinberg")
+            self.dither_strength.set(128)
+            self.dot_size.set(3)
+            self.detail.set(6)
+            self.shape.set("Circles")
+            self.zoom.set(1.0)
+            self.color_mode.set("grayscale")
+        elif preset_name == "retro":
+            self.brightness.set(1.1)
+            self.contrast.set(1.5)
+            self.black_clip.set(30)
+            self.dither_algorithm.set("Ordered")
+            self.dither_strength.set(150)
+            self.dot_size.set(5)
+            self.detail.set(4)
+            self.shape.set("Squares (aligned)")
+            self.zoom.set(2.0)
+            self.color_mode.set("grayscale")
+        elif preset_name == "modern":
+            self.brightness.set(0.9)
+            self.contrast.set(1.8)
+            self.black_clip.set(10)
+            self.dither_algorithm.set("Atkinson")
+            self.dither_strength.set(100)
+            self.dot_size.set(6)
+            self.detail.set(12)
+            self.shape.set("Triangles (random)")
+            self.zoom.set(1.5)
+            self.color_mode.set("color")
+            self.hue.set(0.6)
+        
+        self.debounced_update_preview()
+
+    def reset_to_defaults(self):
+        """Reset all controls to default values"""
+        self.brightness.set(1.0)
+        self.contrast.set(1.0)
+        self.black_clip.set(0)
+        self.dither_algorithm.set("Floyd-Steinberg")
+        self.dither_strength.set(128)
+        self.dot_size.set(4)
+        self.detail.set(8)
+        self.shape.set("Circles")
+        self.zoom.set(1.0)
+        self.color_mode.set("grayscale")
+        self.hue.set(0.0)
+        self.debounced_update_preview()
 
     def load_image(self):
         file_path = filedialog.askopenfilename(title="Select Image", filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff")])
