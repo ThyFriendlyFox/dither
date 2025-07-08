@@ -25,7 +25,7 @@ class DitherDockApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Dither Dock")
-        self.root.geometry("1200x800")
+        self.root.geometry("1200x800")  # Removed redundant geometry setting
         self.root.configure(bg="#222")
         self.image = None
         self.preview_image = None
@@ -112,8 +112,10 @@ class DitherDockApp:
         file_menu_btn['menu'] = file_menu
         self.dock_controls.append(file_menu_btn)
 
+        self.dock_relayout_timer = None
         self.relayout_dock()
-        self.root.bind('<Configure>', lambda event: self.relayout_dock())
+        self.root.bind('<Configure>', self.debounced_relayout_dock)
+        self.root.after(200, self.relayout_dock)  # Force relayout after window is shown
 
     def add_slider_entry(self, parent, label, var, minv, maxv, default, is_int=False):
         frame = ttk.Frame(parent)
@@ -390,10 +392,12 @@ class DitherDockApp:
         # Remove all widgets from dock
         for widget in self.dock.winfo_children():
             widget.grid_forget()
-        # Get available width
+        # Use dock's width if reasonable, else fallback to root's width
         width = self.dock.winfo_width()
+        if width < 100:
+            width = self.root.winfo_width() - 24
         if width <= 1:
-            width = self.root.winfo_width()  # Use root window width if dock is not yet sized
+            width = 800  # fallback default
         # Estimate how many controls fit per row
         x = 0
         row = 0
@@ -410,8 +414,14 @@ class DitherDockApp:
             x += w
             col += 1
 
+    def debounced_relayout_dock(self, event=None, delay=100):
+        if hasattr(self, 'dock_relayout_timer') and self.dock_relayout_timer:
+            self.root.after_cancel(self.dock_relayout_timer)
+        self.dock_relayout_timer = self.root.after(delay, self.relayout_dock)
+
 def main():
     root = tk.Tk()
+    # root.geometry("1600x900")  # Set a wider default window size
     app = DitherDockApp(root)
     def on_resize(event):
         app.debounced_update_preview()
