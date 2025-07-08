@@ -55,54 +55,65 @@ class DitherDockApp:
         self.canvas = tk.Canvas(self.root, bg="#222", highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
-        # Bottom dock frame
-        dock = tk.Frame(self.root, bg="#222", height=120)
-        dock.pack(side=tk.BOTTOM, fill=tk.X)
+        # Bottom dock frame (responsive, word-wrap style)
+        self.dock = tk.Frame(self.root, bg="#222", height=120)
+        self.dock.pack(side=tk.BOTTOM, fill=tk.X)
 
+        # Store all controls in a list of (label, widget) tuples
+        self.dock_controls = []
+        def add_control(label_text, widget):
+            if label_text:
+                lbl = ttk.Label(self.dock, text=label_text)
+                self.dock_controls.append(lbl)
+            self.dock_controls.append(widget)
+
+        # Brightness
+        add_control("Brightness:", ttk.Scale(self.dock, from_=0.2, to=2.0, variable=self.brightness, orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview(), length=80))
+        add_control("", ttk.Entry(self.dock, textvariable=self.brightness, width=5))
+        # Contrast
+        add_control("Contrast:", ttk.Scale(self.dock, from_=0.5, to=2.0, variable=self.contrast, orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview(), length=80))
+        add_control("", ttk.Entry(self.dock, textvariable=self.contrast, width=5))
+        # Black Clip
+        add_control("Black Clip:", ttk.Scale(self.dock, from_=0, to=128, variable=self.black_clip, orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview(), length=80))
+        add_control("", ttk.Entry(self.dock, textvariable=self.black_clip, width=5))
+        # Algorithm
+        algo_combo = ttk.Combobox(self.dock, textvariable=self.dither_algorithm, values=self.dither_algorithms, state="readonly", width=15)
+        algo_combo.bind("<Button-1>", self.show_dropup)
+        algo_combo.bind("<<ComboboxSelected>>", lambda e: self.debounced_update_preview())
+        add_control("Algorithm:", algo_combo)
+        # Brightness Threshold
+        add_control("Brightness Threshold:", ttk.Scale(self.dock, from_=0, to=255, variable=self.dither_strength, orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview(), length=80))
+        add_control("", ttk.Entry(self.dock, textvariable=self.dither_strength, width=5))
+        # Dot Size
+        add_control("Dot Size:", ttk.Scale(self.dock, from_=1, to=12, variable=self.dot_size, orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview(), length=80))
+        add_control("", ttk.Entry(self.dock, textvariable=self.dot_size, width=5))
+        # Detail
+        add_control("Detail:", ttk.Scale(self.dock, from_=1, to=64, variable=self.detail, orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview(), length=80))
+        add_control("", ttk.Entry(self.dock, textvariable=self.detail, width=5))
+        # Shape/Orientation
+        shape_combo = ttk.Combobox(self.dock, textvariable=self.shape, values=self.shape_options, state="readonly", width=18)
+        shape_combo.bind("<<ComboboxSelected>>", lambda e: self.debounced_update_preview())
+        add_control("Shape/Orientation:", shape_combo)
+        # Zoom
+        add_control("Zoom:", ttk.Scale(self.dock, from_=0.5, to=3.0, variable=self.zoom, orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview(), length=80))
+        add_control("", ttk.Entry(self.dock, textvariable=self.zoom, width=5))
+        # Color toggle
+        color_toggle = ttk.Checkbutton(self.dock, text="Color", variable=self.color_mode, onvalue="color", offvalue="grayscale", command=self.debounced_update_preview)
+        self.dock_controls.append(color_toggle)
+        # Mono Hue
+        self.dock_controls.append(ttk.Label(self.dock, text="Mono Hue:"))
+        self.dock_controls.append(ttk.Scale(self.dock, from_=0, to=1, variable=self.hue, orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview(), length=100))
         # File menu dropdown
-        file_menu_btn = ttk.Menubutton(dock, text="File ▼")
+        file_menu_btn = ttk.Menubutton(self.dock, text="File ▼")
         file_menu = tk.Menu(file_menu_btn, tearoff=0)
         file_menu.add_command(label="Load Image", command=self.load_image)
         file_menu.add_command(label="Save Image", command=self.save_image)
         file_menu.add_command(label="Apply to Folder", command=self.apply_to_folder)
         file_menu_btn['menu'] = file_menu
-        file_menu_btn.pack(side=tk.RIGHT, padx=10, pady=10)
+        self.dock_controls.append(file_menu_btn)
 
-        # Collapsible: Image Adjustments
-        adj_section = CollapsibleSection(dock, "Image Adjustments")
-        adj_section.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
-        self.add_slider_entry(adj_section.body, "Brightness", self.brightness, 0.2, 2.0, 1.0)
-        self.add_slider_entry(adj_section.body, "Contrast", self.contrast, 0.5, 2.0, 1.0)
-        self.add_slider_entry(adj_section.body, "Black Clip", self.black_clip, 0, 128, 0, is_int=True)
-
-        # Collapsible: Dither Style
-        style_section = CollapsibleSection(dock, "Dither Style")
-        style_section.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
-        algo_label = ttk.Label(style_section.body, text="Algorithm:")
-        algo_label.pack(anchor=tk.W)
-        algo_combo = ttk.Combobox(style_section.body, textvariable=self.dither_algorithm, values=self.dither_algorithms, state="readonly", width=15)
-        algo_combo.pack(fill=tk.X, pady=2)
-        algo_combo.bind("<Button-1>", self.show_dropup)
-        algo_combo.bind("<<ComboboxSelected>>", lambda e: self.debounced_update_preview())
-        self.add_slider_entry(style_section.body, "Brightness Threshold", self.dither_strength, 0, 255, 128, is_int=True)
-        self.add_slider_entry(style_section.body, "Dot Size", self.dot_size, 1, 12, 4, is_int=True)
-        self.add_slider_entry(style_section.body, "Detail", self.detail, 1, 64, 8, is_int=True)
-        shape_label = ttk.Label(style_section.body, text="Shape/Orientation:")
-        shape_label.pack(anchor=tk.W, pady=(6,0))
-        shape_combo = ttk.Combobox(style_section.body, textvariable=self.shape, values=self.shape_options, state="readonly", width=18)
-        shape_combo.pack(fill=tk.X, pady=2)
-        shape_combo.bind("<<ComboboxSelected>>", lambda e: self.debounced_update_preview())
-
-        # Collapsible: Output
-        out_section = CollapsibleSection(dock, "Output")
-        out_section.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
-        self.add_slider_entry(out_section.body, "Zoom", self.zoom, 0.5, 3.0, 1.0)
-        color_toggle = ttk.Checkbutton(out_section.body, text="Color", variable=self.color_mode, onvalue="color", offvalue="grayscale", command=self.debounced_update_preview)
-        color_toggle.pack(anchor=tk.W, pady=(6,0))
-        hue_label = ttk.Label(out_section.body, text="Mono Hue:")
-        hue_label.pack(anchor=tk.W)
-        hue_slider = ttk.Scale(out_section.body, from_=0, to=1, variable=self.hue, orient=tk.HORIZONTAL, command=lambda e: self.debounced_update_preview(), length=100)
-        hue_slider.pack(fill=tk.X)
+        self.relayout_dock()
+        self.root.bind('<Configure>', lambda event: self.relayout_dock())
 
     def add_slider_entry(self, parent, label, var, minv, maxv, default, is_int=False):
         frame = ttk.Frame(parent)
@@ -372,6 +383,32 @@ class DitherDockApp:
         if hasattr(self, 'debounce_timer') and self.debounce_timer:
             self.root.after_cancel(self.debounce_timer)
         self.debounce_timer = self.root.after(delay, self.update_preview)
+
+    def relayout_dock(self):
+        # Ensure all widget sizes are up to date
+        self.root.update_idletasks()
+        # Remove all widgets from dock
+        for widget in self.dock.winfo_children():
+            widget.grid_forget()
+        # Get available width
+        width = self.dock.winfo_width()
+        if width <= 1:
+            width = self.root.winfo_width()  # Use root window width if dock is not yet sized
+        # Estimate how many controls fit per row
+        x = 0
+        row = 0
+        col = 0
+        pad = 4
+        for widget in self.dock_controls:
+            widget.update_idletasks()
+            w = widget.winfo_reqwidth() + pad
+            if x + w > width and col > 0:
+                row += 1
+                col = 0
+                x = 0
+            widget.grid(row=row, column=col, sticky='w', padx=2, pady=4)
+            x += w
+            col += 1
 
 def main():
     root = tk.Tk()
