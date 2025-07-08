@@ -1,4 +1,4 @@
-![Dither Dock Screenshot](./'Screenshot 2025-07-07 at 22.34.44.png')
+![Dither Dock Screenshot](./Screenshot.png)
 
 # Dither Dock
 
