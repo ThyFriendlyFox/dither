@@ -28,7 +28,7 @@ A Python GUI application for creating artistic dithering effects on images. Dith
 2. Install the required dependencies:
 
 ```bash
-pip install Pillow numpy
+pip install -r requirements.txt
 ```
 
 ## Usage
