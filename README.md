@@ -1,7 +1,5 @@
 ![Dither Dock Screenshot](./Screenshot.png)
 
-# Dither Dock
-
 A Python GUI application for creating artistic dithering effects on images. Dither Dock allows you to apply various dithering algorithms and shape-based patterns to transform your images into stylized, pixelated artwork.
 
 ## Features
